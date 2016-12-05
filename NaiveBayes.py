@@ -34,6 +34,7 @@ data_train = data_train.reset_index(drop=True)
 data_test['text'] = X_test
 data_test['airline_sentiment'] = y_test
 data_test = data_test.reset_index(drop=True)
+
 # d is the number of words in positive text,I remember d= 16650
 # e is the number of words in negative text,I remember e= 80297
 # f is is the number of words in neutral text,I remember f= 21642
@@ -54,11 +55,20 @@ pos_words =(dataPos['text'].tolist())
 neg_words =(dataNeg['text'].tolist())
 neu_words =(dataNeu['text'].tolist())
 all_words =(data_train['text'].tolist())
+
+# Attention de bien differencier les nombres de tweets des nombres de mots
+print("nuttpos",len(pos_words),sum([len(u) for u in pos_words]))
+print("nuttneg",len(neg_words),sum([len(u) for u in pos_words]))
+print("nuttneu",len(neu_words),sum([len(u) for u in pos_words]))
+
 #calcul the probability of positive text,negative test,and neutral text
 #I remeber P_pos=0.1638,P_neg=0.623975409836,P_neu=0.212175546448
+
 P_pos = float(len(dataPos))/len(dataAll)
 P_neg = float(len(dataNeg))/len(dataAll)
 P_neu = float(len(dataNeu))/len(dataAll)
+print("priors",P_pos,P_neg,P_neu)
+
 # I use copos,coneg,coneu to divide the training data into 3 emotions
 for i in range(0, len(pos_words)):
         copos1.update(pos_words[i])
@@ -68,6 +78,15 @@ for i in range(0, len(neg_words)):
 
 for i in range(0, len(neu_words)): 
         coneu3.update(neu_words[i])
+
+voctot = collections.Counter()
+voctot.update(copos1)
+voctot.update(coneg2)
+voctot.update(coneu3)
+nvoctot=len(voctot)
+print("nvoctot",nvoctot)
+for w in voctot.keys():
+    print("VOC "+w)
 
 #calcul the number d,e,f
 for i in range(0, len(pos_words)):
@@ -81,11 +100,12 @@ for i in range(0, len(neg_words)):
 for i in range(0, len(neu_words)):
        for w in neu_words[i]:
                 f=f+1
+print("nmots pos neg neu",d,e,f)
 
 #then I predict the result of Testing data
 # the result of predicting including positive,negative and neutral
 class_choice = ['positive', 'negative', 'neutral']
-classification = []      
+classification = []
 test_words =(data_test['text'].tolist())
 # i= the i-th person'sopinion
 for i in range(0, len(test_words)):
@@ -93,12 +113,22 @@ for i in range(0, len(test_words)):
        for w in test_words[i]:
 #I think this part maybe have some problems, I use the formulas in the Wikipedia, but there are lots of variables
 #So i'm afraid of this part has some problems,maybe we can talk about this part on monday.
-               a=a+np.log((copos1[w]+1)/float(d))
-               b=b+np.log((coneg2[w]+1)/float(e))
-               c=c+np.log((coneu3[w]+1)/float(f))
-       a=a+np.log(P_pos/(float(1)/len(dataPos)))
-       b=b+np.log(P_neg/(float(1)/len(dataNeg)))
-       c=c+np.log(P_neu/(float(1)/len(dataNeu)))
+
+# vous voulez calculer P(w|S)=P(w,S)/P(S)=(nb d'occ de w pos / nb de mots tot)/(nb de mots pos / nb de mots tot) = (nb d'occ de w pos/nb de mots pos)
+# copos1[w] = nb d'occ de w pos
+# d = nb de mots pos
+# WARNING: pourquoi +1 ?
+# WARNING: n'oubliez pas le float() devant copos1
+# la, vous calculez: sum_w ln(P(w|S))
+# si vous utilisez du smoothing, il vaut mieux calculer de vrais probas ici, c'est plus clair que d'essayer de deporter le denominateur a l'exterieur
+               a=a+np.log((float(copos1[w]+1))/float(d+nvoctot))
+               b=b+np.log((float(coneg2[w]+1))/float(e+nvoctot))
+               c=c+np.log((float(coneu3[w]+1))/float(f+nvoctot))
+# il suffit de calculer ln P(S|D) = sum_w ln(P(w|S)) + ln(P(S)) - constante
+# et on se moque de la constante
+       a=a+np.log(P_pos)
+       b=b+np.log(P_neg)
+       c=c+np.log(P_neu)
 #I choose the best results from the training data to predict the testing data
        probability = (a, b, c)
        classification.append(class_choice[np.argmax(probability)])
